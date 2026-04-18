@@ -39,6 +39,8 @@ import type {
 	Context,
 	Model,
 	SimpleStreamOptions,
+	OAuthCredentials,
+	OAuthLoginCallbacks,
 } from "@mariozechner/pi-ai";
 import { streamSimpleOpenAICompletions } from "@mariozechner/pi-ai";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
@@ -629,6 +631,157 @@ async function fetchNimModels(apiKey: string): Promise<string[]> {
 }
 
 // =============================================================================
+// Helper Functions
+// =============================================================================
+
+/**
+ * Test the NVIDIA API key by making a simple API call
+ * @param apiKey - The NVIDIA API key to test
+ * @throws Error if the API key is invalid or the API call fails
+ */
+async function testApiKey(apiKey: string): Promise<void> {
+	try {
+		const response = await fetch(`${NVIDIA_NIM_BASE_URL}/models`, {
+			method: "GET",
+			headers: {
+				"Authorization": `Bearer ${apiKey}`,
+				"Content-Type": "application/json"
+			}
+		});
+
+		if (!response.ok) {
+			const errorText = await response.text();
+			if (response.status === 401) {
+				throw new Error("Invalid NVIDIA API key. Please check your key and try again.");
+			} else if (response.status === 403) {
+				throw new Error("Access denied. Your NVIDIA API key may not have the required permissions.");
+			} else {
+				throw new Error(`API test failed with status ${response.status}: ${errorText}`);
+			}
+		}
+
+		// Verify the response contains expected data
+		const data = await response.json();
+		if (!data || !Array.isArray(data.data)) {
+			throw new Error("Unexpected API response format. Please contact support.");
+		}
+	} catch (error) {
+		if (error instanceof Error) {
+			throw error;
+		}
+		throw new Error("Failed to test API key. Please check your internet connection and try again.");
+	}
+}
+
+/**
+ * Test a specific model's availability and response time
+ * @param apiKey - The NVIDIA API key
+ * @param modelId - The model ID to test
+ * @returns Object with status, response time, and error if any
+ */
+async function testModelAvailability(apiKey: string, modelId: string): Promise<{
+	status: 'working' | 'slow' | 'error';
+	responseTime?: number;
+	error?: string;
+}> {
+	const startTime = Date.now();
+	try {
+		const response = await fetch(`${NVIDIA_NIM_BASE_URL}/chat/completions`, {
+			method: "POST",
+			headers: {
+				"Authorization": `Bearer ${apiKey}`,
+				"Content-Type": "application/json"
+			},
+			body: JSON.stringify({
+				model: modelId,
+				messages: [{ role: "user", content: "test" }],
+				max_tokens: 10
+			})
+		});
+
+		const responseTime = Date.now() - startTime;
+
+		if (!response.ok) {
+			const errorText = await response.text();
+			if (response.status === 429) {
+				return { status: 'error', error: 'Rate limited (429)' };
+			} else if (response.status === 500) {
+				return { status: 'error', error: 'Server error (500)' };
+			} else if (response.status === 404) {
+				return { status: 'error', error: 'Model not found (404)' };
+			} else {
+				return { status: 'error', error: `HTTP ${response.status}` };
+			}
+		}
+
+		// Consider models with response time > 5 seconds as slow
+		if (responseTime > 5000) {
+			return { status: 'slow', responseTime };
+		}
+
+		return { status: 'working', responseTime };
+	} catch (error) {
+		return { status: 'error', error: error instanceof Error ? error.message : 'Unknown error' };
+	}
+}
+
+/**
+ * Check health of multiple NVIDIA models
+ * @param apiKey - The NVIDIA API key
+ * @param modelIds - Array of model IDs to check
+ * @param limit - Maximum number of models to check (default: 10)
+ * @returns Health check results
+ */
+async function checkNvidiaModelHealth(apiKey: string, modelIds: string[], limit: number = 10): Promise<{
+	working: Array<{ id: string; responseTime: number }>;
+	slow: Array<{ id: string; responseTime: number }>;
+	error: Array<{ id: string; error: string }>;
+	summary: {
+		total: number;
+		working: number;
+		slow: number;
+		error: number;
+	};
+}> {
+	const modelsToCheck = modelIds.slice(0, limit);
+	const results = {
+		working: [] as Array<{ id: string; responseTime: number }>,
+		slow: [] as Array<{ id: string; responseTime: number }>,
+		error: [] as Array<{ id: string; error: string }>,
+		summary: {
+			total: modelsToCheck.length,
+			working: 0,
+			slow: 0,
+			error: 0
+		}
+	};
+
+	// Test models in parallel with a small delay between requests to avoid rate limiting
+	const promises = modelsToCheck.map(async (modelId, index) => {
+		// Add staggered delay to avoid rate limiting
+		await new Promise(resolve => setTimeout(resolve, index * 200));
+		return { modelId, result: await testModelAvailability(apiKey, modelId) };
+	});
+
+	const testResults = await Promise.all(promises);
+
+	for (const { modelId, result } of testResults) {
+		if (result.status === 'working') {
+			results.working.push({ id: modelId, responseTime: result.responseTime || 0 });
+			results.summary.working++;
+		} else if (result.status === 'slow') {
+			results.slow.push({ id: modelId, responseTime: result.responseTime || 0 });
+			results.summary.slow++;
+		} else {
+			results.error.push({ id: modelId, error: result.error || 'Unknown error' });
+			results.summary.error++;
+		}
+	}
+
+	return results;
+}
+
+// =============================================================================
 // Extension Entry Point
 // =============================================================================
 
@@ -652,6 +805,100 @@ export default function (pi: ExtensionAPI) {
 		authHeader: true,
 		models: curatedModels,
 		streamSimple: nimStreamSimple,
+		oauth: {
+			name: "NVIDIA NIM",
+			async login(callbacks: OAuthLoginCallbacks): Promise<OAuthCredentials> {
+				// Prompt user for their NVIDIA API key
+				const apiKey = await callbacks.onPrompt({
+					message: "Enter your NVIDIA API key (get one at https://build.nvidia.com):"
+				});
+
+				// Validate the key format (NVIDIA keys start with 'nvapi-')
+				if (!apiKey.startsWith("nvapi-")) {
+					throw new Error("Invalid NVIDIA API key format. Keys should start with 'nvapi-'");
+				}
+
+				// Test the API key by making a simple API call
+				await testApiKey(apiKey);
+
+				// Return credentials (no expiration for API keys)
+				return {
+					refresh: apiKey,
+					access: apiKey,
+					expires: Date.now() + 365 * 24 * 60 * 60 * 1000 // 1 year from now
+				};
+			},
+			async refreshToken(credentials: OAuthCredentials): Promise<OAuthCredentials> {
+				// API keys don't expire, just return the same credentials
+				return credentials;
+			},
+			getApiKey(credentials: OAuthCredentials): string {
+				return credentials.access;
+			}
+		}
+	});
+
+	// Register /nvidia-health command
+	pi.registerCommand({
+		name: "nvidia-health",
+		description: "Check health and availability of NVIDIA NIM models",
+		async handler(context: any) {
+			const apiKey = process.env[NVIDIA_NIM_API_KEY_ENV];
+			if (!apiKey) {
+				return "❌ NVIDIA_NIM_API_KEY environment variable is not set.\n\nPlease set it first:\nexport NVIDIA_NIM_API_KEY=nvapi-...";
+			}
+
+			// Get featured models for testing
+			const modelsToTest = FEATURED_MODELS.slice(0, 10);
+
+			context.say("🔍 Checking NVIDIA NIM model health...");
+
+			try {
+				const healthResults = await checkNvidiaModelHealth(apiKey, modelsToTest, 10);
+
+				let output = "\n🔍 NVIDIA Model Health Check\n\n";
+
+				// Working models
+				if (healthResults.working.length > 0) {
+					output += "✅ WORKING MODELS (" + healthResults.working.length + "/" + healthResults.summary.total + "):\n";
+					for (const model of healthResults.working) {
+						const modelName = model.id.split('/').pop()?.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || model.id;
+						output += `  • ${modelName} - ${(model.responseTime / 1000).toFixed(1)}s response\n`;
+					}
+					output += "\n";
+				}
+
+				// Slow models
+				if (healthResults.slow.length > 0) {
+					output += "⚠️  SLOW MODELS (" + healthResults.slow.length + "/" + healthResults.summary.total + "):\n";
+					for (const model of healthResults.slow) {
+						const modelName = model.id.split('/').pop()?.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || model.id;
+						output += `  • ${modelName} - ${(model.responseTime / 1000).toFixed(1)}s response\n`;
+					}
+					output += "\n";
+				}
+
+				// Error models
+				if (healthResults.error.length > 0) {
+					output += "❌ UNAVAILABLE MODELS (" + healthResults.error.length + "/" + healthResults.summary.total + "):\n";
+					for (const model of healthResults.error) {
+						const modelName = model.id.split('/').pop()?.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || model.id;
+						output += `  • ${modelName} - ${model.error}\n`;
+					}
+					output += "\n";
+				}
+
+				// Summary
+				output += "📊 SUMMARY:\n";
+				output += `  • ${healthResults.summary.working} models working normally\n`;
+				output += `  • ${healthResults.summary.slow} model${healthResults.summary.slow !== 1 ? 's' : ''} slow but functional\n`;
+				output += `  • ${healthResults.summary.error} model${healthResults.summary.error !== 1 ? 's' : ''} unavailable\n`;
+
+				return output;
+			} catch (error) {
+				return "❌ Failed to check model health: " + (error instanceof Error ? error.message : 'Unknown error');
+			}
+		}
 	});
 
 	// On session start, discover additional models from the API
