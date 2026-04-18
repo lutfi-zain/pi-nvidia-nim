@@ -901,6 +901,36 @@ export default function (pi: ExtensionAPI) {
 		}
 	});
 
+	// Register keyboard shortcut for health check (alternative to slash command)
+	pi.registerShortcut("ctrl+alt+h", {
+		description: "Check NVIDIA model health",
+		async handler(context: any) {
+			// Reuse the same logic as the command
+			const apiKey = process.env[NVIDIA_NIM_API_KEY_ENV];
+			if (!apiKey) {
+				context.ui.notify("NVIDIA_NIM_API_KEY not set", "error");
+				return;
+			}
+
+			context.ui.notify("Checking NVIDIA model health...", "info");
+
+			try {
+				const modelsToTest = FEATURED_MODELS.slice(0, 10);
+				const healthResults = await checkNvidiaModelHealth(apiKey, modelsToTest, 10);
+
+				// Show results in a notification
+				let message = `Health check complete:\n`;
+				message += `✅ ${healthResults.summary.working} working\n`;
+				message += `⚠️  ${healthResults.summary.slow} slow\n`;
+				message += `❌ ${healthResults.summary.error} unavailable`;
+
+				context.ui.notify(message, "success");
+			} catch (error) {
+				context.ui.notify("Health check failed: " + (error instanceof Error ? error.message : "Unknown error"), "error");
+			}
+		}
+	});
+
 	// On session start, discover additional models from the API
 	pi.on("session_start", async (_event: any, ctx: any) => {
 		const apiKey = process.env[NVIDIA_NIM_API_KEY_ENV];
