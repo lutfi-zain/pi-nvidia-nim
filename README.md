@@ -16,17 +16,6 @@ https://github.com/user-attachments/assets/f44773e4-9bf8-4bb5-a9c0-d5938030701c
 
 ### 2. Set Your API Key
 
-**Method 1: Using `/login` (Recommended)**
-
-```bash
-pi
-/login nvidia-nim
-```
-
-Enter your NVIDIA API key when prompted. The extension will validate the key and test it before saving.
-
-**Method 2: Environment Variable**
-
 ```bash
 export NVIDIA_NIM_API_KEY=nvapi-your-key-here
 ```
@@ -59,40 +48,15 @@ Once loaded, NVIDIA NIM models appear in the `/model` selector under the `nvidia
 
 - Press **Ctrl+L** to open the model selector and search for `nvidia-nim`
 - Use `/scoped-models` to pin your favourite NIM models for quick switching
-- Use `/login nvidia-nim` to authenticate with your NVIDIA API key
-- Use `/nvidia-health` to check model availability and performance
-
-### Authentication
-
-#### Method 1: Using `/login` (Recommended)
-
-```bash
-pi
-/login nvidia-nim
-```
-
-You'll be prompted to enter your NVIDIA API key. Get your API key at [https://build.nvidia.com](https://build.nvidia.com).
-
-**API Key Validation:**
-- The extension will validate your API key format (must start with `nvapi-`)
-- It will then test the key by making a live API call to NVIDIA
-- If the key is invalid or has insufficient permissions, you'll receive a clear error message
-- Only valid keys will be saved to your credentials
-
-#### Method 2: Environment Variable
-
-```bash
-export NVIDIA_NIM_API_KEY=nvapi-your-key-here
-```
-
-Add this to your `~/.bashrc`, `~/.zshrc`, or shell profile to persist it.
+- Press **Ctrl+Alt+H** to check NVIDIA model health
 
 ### Model Health Check
 
-Use the `/nvidia-health` command to check the current status and performance of NVIDIA NIM models:
+**Use keyboard shortcut:** Press **Ctrl+Alt+H** to check the current status and performance of NVIDIA NIM models.
 
+**Or use standalone script:**
 ```bash
-/nvidia-health
+node standalone-nvidia-health.js
 ```
 
 This will:
@@ -103,24 +67,10 @@ This will:
 
 **Example output:**
 ```
-🔍 NVIDIA Model Health Check
-
-✅ WORKING MODELS (8/10):
-  • Deepseek V3.2 - 1.2s response
-  • Kimi K2.5 - 0.8s response
-  • GLM5 - 1.5s response
-  ...
-
-⚠️  SLOW MODELS (1/10):
-  • Minimax M2.1 - 11.0s response
-
-❌ UNAVAILABLE MODELS (1/10):
-  • Devstral 2 123B - Rate limited (429)
-
-📊 SUMMARY:
-  • 8 models working normally
-  • 1 model slow but functional
-  • 1 model unavailable
+Health check complete:
+✅ 3 working
+⚠️  2 slow
+❌ 5 unavailable
 ```
 
 ### CLI
@@ -135,23 +85,6 @@ pi --provider nvidia-nim --model "deepseek-ai/deepseek-v3.2" --thinking low
 # Limit model cycling to NIM models
 pi --models "nvidia-nim/*"
 ```
-
-## New Features
-
-### 🔐 Interactive Login
-
-- **`/login nvidia-nim`** - Interactive authentication with live API key validation
-- **Format validation** - Ensures keys start with `nvapi-`
-- **Live testing** - Tests API keys before saving credentials
-- **Clear error messages** - Helpful feedback for authentication issues
-
-### 🏥 Model Health Check
-
-- **`/nvidia-health`** - Check availability and performance of NVIDIA NIM models
-- **Response time measurement** - Identify slow or fast models
-- **Error categorization** - Distinguish between rate limits, server errors, and unavailable models
-- **Health summary** - Quick overview of model status
-- **Staggered testing** - Avoids rate limiting during health checks
 
 ## Reasoning / Thinking
 
