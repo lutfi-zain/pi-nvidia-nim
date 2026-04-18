@@ -838,69 +838,6 @@ export default function (pi: ExtensionAPI) {
 		}
 	});
 
-	// Register /nvidia-health command
-	pi.registerCommand({
-		name: "nvidia-health",
-		description: "Check health and availability of NVIDIA NIM models",
-		async handler(context: any) {
-			const apiKey = process.env[NVIDIA_NIM_API_KEY_ENV];
-			if (!apiKey) {
-				return "❌ NVIDIA_NIM_API_KEY environment variable is not set.\n\nPlease set it first:\nexport NVIDIA_NIM_API_KEY=nvapi-...";
-			}
-
-			// Get featured models for testing
-			const modelsToTest = FEATURED_MODELS.slice(0, 10);
-
-			context.say("🔍 Checking NVIDIA NIM model health...");
-
-			try {
-				const healthResults = await checkNvidiaModelHealth(apiKey, modelsToTest, 10);
-
-				let output = "\n🔍 NVIDIA Model Health Check\n\n";
-
-				// Working models
-				if (healthResults.working.length > 0) {
-					output += "✅ WORKING MODELS (" + healthResults.working.length + "/" + healthResults.summary.total + "):\n";
-					for (const model of healthResults.working) {
-						const modelName = model.id.split('/').pop()?.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || model.id;
-						output += `  • ${modelName} - ${(model.responseTime / 1000).toFixed(1)}s response\n`;
-					}
-					output += "\n";
-				}
-
-				// Slow models
-				if (healthResults.slow.length > 0) {
-					output += "⚠️  SLOW MODELS (" + healthResults.slow.length + "/" + healthResults.summary.total + "):\n";
-					for (const model of healthResults.slow) {
-						const modelName = model.id.split('/').pop()?.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || model.id;
-						output += `  • ${modelName} - ${(model.responseTime / 1000).toFixed(1)}s response\n`;
-					}
-					output += "\n";
-				}
-
-				// Error models
-				if (healthResults.error.length > 0) {
-					output += "❌ UNAVAILABLE MODELS (" + healthResults.error.length + "/" + healthResults.summary.total + "):\n";
-					for (const model of healthResults.error) {
-						const modelName = model.id.split('/').pop()?.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || model.id;
-						output += `  • ${modelName} - ${model.error}\n`;
-					}
-					output += "\n";
-				}
-
-				// Summary
-				output += "📊 SUMMARY:\n";
-				output += `  • ${healthResults.summary.working} models working normally\n`;
-				output += `  • ${healthResults.summary.slow} model${healthResults.summary.slow !== 1 ? 's' : ''} slow but functional\n`;
-				output += `  • ${healthResults.summary.error} model${healthResults.summary.error !== 1 ? 's' : ''} unavailable\n`;
-
-				return output;
-			} catch (error) {
-				return "❌ Failed to check model health: " + (error instanceof Error ? error.message : 'Unknown error');
-			}
-		}
-	});
-
 	// Register keyboard shortcut for health check (alternative to slash command)
 	pi.registerShortcut("ctrl+alt+h", {
 		description: "Check NVIDIA model health",

@@ -60,7 +60,6 @@ Once loaded, NVIDIA NIM models appear in the `/model` selector under the `nvidia
 - Press **Ctrl+L** to open the model selector and search for `nvidia-nim`
 - Use `/scoped-models` to pin your favourite NIM models for quick switching
 - Use `/login nvidia-nim` to authenticate with your NVIDIA API key
-- Use `/nvidia-health` to check model availability and performance
 - Press **Ctrl+Alt+H** for quick health check via keyboard shortcut
 
 ### Authentication
@@ -90,20 +89,15 @@ Add this to your `~/.bashrc`, `~/.zshrc`, or shell profile to persist it.
 
 ### Model Health Check
 
-**Method 1: Slash Command**
-```bash
-/nvidia-health
-```
-
-**Method 2: Keyboard Shortcut**
+**Method 1: Keyboard Shortcut (Recommended)**
 Press **Ctrl+Alt+H** for quick health check.
 
-**Method 3: Standalone Script**
+**Method 2: Standalone Script**
 ```bash
 node standalone-nvidia-health.js
 ```
 
-All methods will:
+Both methods will:
 - Test the availability of featured models
 - Measure response times for each model
 - Identify rate-limited or unavailable models
@@ -111,28 +105,10 @@ All methods will:
 
 **Example output:**
 ```
-🔍 NVIDIA Model Health Check
-
-✅ WORKING MODELS (3/10):
-  • Kimi K2 Thinking - 3.3s response
-  • Glm4.7 - 1.1s response
-  • Gpt Oss 120b - 0.6s response
-
-⚠️  SLOW MODELS (2/10):
-  • Kimi K2.5 - 17.0s response
-  • Glm5 - 49.2s response
-
-❌ UNAVAILABLE MODELS (5/10):
-  • Deepseek V3.2 - HTTP 502
-  • Deepseek V3.1 - HTTP 410
-  • Minimax M2.1 - HTTP 410
-  • Qwen3 Coder 480b A35b Instruct - HTTP 400
-  • Qwen3 235b A22b - HTTP 410
-
-📊 SUMMARY:
-  • 3 models working normally
-  • 2 models slow but functional
-  • 5 models unavailable
+Health check complete:
+✅ 3 working
+⚠️  2 slow
+❌ 5 unavailable
 ```
 
 ### CLI
@@ -159,7 +135,6 @@ pi --models "nvidia-nim/*"
 
 ### 🏥 Model Health Check
 
-- **`/nvidia-health`** - Check availability and performance of NVIDIA NIM models
 - **`Ctrl+Alt+H`** - Quick health check via keyboard shortcut
 - **`standalone-nvidia-health.js`** - Independent health check script
 - **Response time measurement** - Identify slow or fast models
